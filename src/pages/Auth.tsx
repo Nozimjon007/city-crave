@@ -44,12 +44,23 @@ const Auth = () => {
 
         if (error) throw error;
 
+        // Check user type and redirect accordingly
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("user_type")
+          .eq("id", (await supabase.auth.getSession()).data.session?.user.id)
+          .single();
+
         toast({
           title: "Welcome back!",
           description: "You've successfully signed in.",
         });
 
-        navigate("/menu");
+        if (profile?.user_type === "staff") {
+          navigate("/staff");
+        } else {
+          navigate("/menu");
+        }
       } else {
         const { error } = await supabase.auth.signUp({
           email: formData.email,
@@ -68,10 +79,14 @@ const Auth = () => {
 
         toast({
           title: "Account created!",
-          description: userType === "staff" ? "Welcome to the team!" : "Welcome! Start ordering now.",
+          description: userType === "staff" ? "Welcome to the team! Please contact admin for branch assignment." : "Welcome! Start ordering now.",
         });
 
-        navigate("/menu");
+        if (userType === "staff") {
+          navigate("/staff");
+        } else {
+          navigate("/menu");
+        }
       }
     } catch (error: any) {
       toast({
