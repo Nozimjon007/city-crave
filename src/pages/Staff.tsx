@@ -93,7 +93,14 @@ const Staff = () => {
 
     if (staff?.branch_id) {
       setBranchId(staff.branch_id);
+    } else {
+      toast({
+        variant: "destructive",
+        title: "No Branch Assigned",
+        description: "Please contact an administrator to assign you to a branch.",
+      });
     }
+    setLoading(false);
   };
 
   const fetchOrders = async () => {
@@ -191,7 +198,15 @@ const Staff = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {orders.length === 0 ? (
+        {!branchId ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">
+                You are not assigned to any branch yet. Please contact an administrator.
+              </p>
+            </CardContent>
+          </Card>
+        ) : orders.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground">No active orders</p>
