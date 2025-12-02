@@ -8,6 +8,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ChefHat, UserCircle } from "lucide-react";
+import { z } from "zod";
+
+// Validation schemas
+const loginSchema = z.object({
+  email: z.string().trim().email("Please enter a valid email address").max(255, "Email is too long"),
+  password: z.string().min(6, "Password must be at least 6 characters").max(100, "Password is too long"),
+});
+
+const signupSchema = loginSchema.extend({
+  name: z.string().trim().min(1, "Name is required").max(100, "Name is too long"),
+  phone: z.string().trim().max(20, "Phone number is too long").optional().or(z.literal("")),
+});
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -15,6 +27,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [userType, setUserType] = useState<"customer" | "staff">("customer");
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     email: "",
@@ -33,13 +46,30 @@ const Auth = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
+    
+    // Validate input based on login/signup mode
+    const schema = isLogin ? loginSchema : signupSchema;
+    const result = schema.safeParse(formData);
+    
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) {
+          fieldErrors[err.path[0] as string] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({
-          email: formData.email,
-          password: formData.password,
+          email: result.data.email,
+          password: result.data.password,
         });
 
         if (error) throw error;
@@ -62,13 +92,14 @@ const Auth = () => {
           navigate("/menu");
         }
       } else {
+        const signupData = result.data as z.infer<typeof signupSchema>;
         const { error } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
+          email: signupData.email,
+          password: signupData.password,
           options: {
             data: {
-              name: formData.name,
-              phone: formData.phone,
+              name: signupData.name,
+              phone: signupData.phone || "",
               user_type: userType,
             },
             emailRedirectTo: `${window.location.origin}/menu`,
@@ -134,8 +165,8 @@ const Auth = () => {
                     placeholder="John Doe"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    required={!isLogin}
                   />
+                  {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
@@ -145,7 +176,9 @@ const Auth = () => {
                     placeholder="+1-555-0100"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    maxLength={20}
                   />
+                  {errors.phone && <p className="text-sm text-destructive">{errors.phone}</p>}
                 </div>
               </>
             )}
@@ -158,8 +191,9 @@ const Auth = () => {
                 placeholder="you@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                required
+                maxLength={255}
               />
+              {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
             </div>
 
             <div className="space-y-2">
@@ -170,9 +204,9 @@ const Auth = () => {
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required
-                minLength={6}
+                maxLength={100}
               />
+              {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>

@@ -9,6 +9,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
+import { z } from "zod";
+
+// Validation schema for checkout
+const checkoutSchema = z.object({
+  orderType: z.enum(["dine_in", "takeaway", "delivery"]),
+  deliveryAddress: z.string().trim().max(500, "Address is too long").optional(),
+  notes: z.string().trim().max(1000, "Notes are too long").optional(),
+}).refine(
+  (data) => data.orderType !== "delivery" || (data.deliveryAddress && data.deliveryAddress.length > 0),
+  { message: "Delivery address is required for delivery orders", path: ["deliveryAddress"] }
+);
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -20,6 +31,7 @@ const Checkout = () => {
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const subtotal = cart.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0);
   const tax = subtotal * 0.1;
@@ -27,11 +39,26 @@ const Checkout = () => {
   const total = subtotal + tax + deliveryFee;
 
   const handlePlaceOrder = async () => {
-    if (orderType === "delivery" && !deliveryAddress.trim()) {
-      toast({ variant: "destructive", title: "Please enter delivery address" });
+    setErrors({});
+    
+    // Validate checkout data
+    const result = checkoutSchema.safeParse({
+      orderType,
+      deliveryAddress: deliveryAddress || undefined,
+      notes: notes || undefined,
+    });
+
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) {
+          fieldErrors[err.path[0] as string] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      toast({ variant: "destructive", title: fieldErrors.deliveryAddress || "Validation error" });
       return;
     }
-
     setLoading(true);
 
     try {
@@ -130,15 +157,17 @@ const Checkout = () => {
                 <CardHeader>
                   <CardTitle>Delivery Address</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <Textarea
-                    placeholder="Enter your delivery address"
-                    value={deliveryAddress}
-                    onChange={(e) => setDeliveryAddress(e.target.value)}
-                    rows={3}
-                  />
-                </CardContent>
-              </Card>
+              <CardContent>
+                <Textarea
+                  placeholder="Enter your delivery address"
+                  value={deliveryAddress}
+                  onChange={(e) => setDeliveryAddress(e.target.value)}
+                  rows={3}
+                  maxLength={500}
+                />
+                {errors.deliveryAddress && <p className="text-sm text-destructive mt-2">{errors.deliveryAddress}</p>}
+              </CardContent>
+            </Card>
             )}
 
             <Card>
@@ -151,7 +180,9 @@ const Checkout = () => {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={3}
+                  maxLength={1000}
                 />
+                {errors.notes && <p className="text-sm text-destructive mt-2">{errors.notes}</p>}
               </CardContent>
             </Card>
           </div>
