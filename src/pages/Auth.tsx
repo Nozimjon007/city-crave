@@ -4,10 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ChefHat, UserCircle } from "lucide-react";
+import { UserCircle } from "lucide-react";
 import { z } from "zod";
 
 // Validation schemas
@@ -26,7 +25,6 @@ const Auth = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
-  const [userType, setUserType] = useState<"customer" | "staff">("customer");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
@@ -74,19 +72,19 @@ const Auth = () => {
 
         if (error) throw error;
 
-        // Check user type and redirect accordingly
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("user_type")
-          .eq("id", (await supabase.auth.getSession()).data.session?.user.id)
-          .single();
+        // Get the session after login
+        const { data: { session } } = await supabase.auth.getSession();
 
         toast({
           title: "Welcome back!",
           description: "You've successfully signed in.",
         });
 
-        if (profile?.user_type === "staff") {
+        // Check if user has staff role using secure RPC function
+        const { data: hasStaffRole } = await supabase
+          .rpc('has_role', { _user_id: session?.user.id, _role: 'staff' });
+
+        if (hasStaffRole) {
           navigate("/staff");
         } else {
           navigate("/menu");
@@ -100,7 +98,7 @@ const Auth = () => {
             data: {
               name: signupData.name,
               phone: signupData.phone || "",
-              user_type: userType,
+              user_type: "customer", // Always customer - staff created by admin only
             },
             emailRedirectTo: `${window.location.origin}/menu`,
           },
@@ -110,14 +108,10 @@ const Auth = () => {
 
         toast({
           title: "Account created!",
-          description: userType === "staff" ? "Welcome to the team! Please contact admin for branch assignment." : "Welcome! Start ordering now.",
+          description: "Welcome! Start ordering now.",
         });
 
-        if (userType === "staff") {
-          navigate("/staff");
-        } else {
-          navigate("/menu");
-        }
+        navigate("/menu");
       }
     } catch (error: any) {
       toast({
@@ -135,11 +129,7 @@ const Auth = () => {
       <Card className="w-full max-w-md shadow-glow">
         <CardHeader className="text-center">
           <div className="mx-auto w-16 h-16 bg-gradient-warm rounded-full flex items-center justify-center mb-4">
-            {userType === "customer" ? (
-              <UserCircle className="w-8 h-8 text-white" />
-            ) : (
-              <ChefHat className="w-8 h-8 text-white" />
-            )}
+            <UserCircle className="w-8 h-8 text-white" />
           </div>
           <CardTitle className="text-3xl font-bold">Tasty Bites</CardTitle>
           <CardDescription>
@@ -147,12 +137,6 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs value={userType} onValueChange={(v) => setUserType(v as "customer" | "staff")} className="mb-6">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="customer">Customer</TabsTrigger>
-              <TabsTrigger value="staff">Staff</TabsTrigger>
-            </TabsList>
-          </Tabs>
 
           <form onSubmit={handleAuth} className="space-y-4">
             {!isLogin && (
