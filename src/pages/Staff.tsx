@@ -74,13 +74,11 @@ const Staff = () => {
       return;
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("user_type")
-      .eq("id", session.user.id)
-      .single();
+    // Use secure RPC function to check staff role
+    const { data: hasStaffRole } = await supabase
+      .rpc('has_role', { _user_id: session.user.id, _role: 'staff' });
 
-    if (profile?.user_type !== "staff") {
+    if (!hasStaffRole) {
       navigate("/menu");
       return;
     }
